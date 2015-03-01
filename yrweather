@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+# Copyright (C) 2015 Peter Helbing <peter@abulafia.org>
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import yr.libyr
+import datetime
+import locale
+import os
+import sys
+
+locale.setlocale(locale.LC_ALL, '')
+
+location = os.environ.get('BLOCK_INSTANCE')
+if location is None or location == '':
+    location = 'Germany/Saxony/Dresden'
+
+wind_arrow = {
+    'S' : "↑",
+    'SW' : "↗",
+    'W' : "→",
+    'NW' : "↘",
+    'N' : "↓",
+    'NE' : "↙",
+    'E' : "←",
+    'SE' : "↖"
+}
+
+weather_symbol = {
+    1 : '☀', # 1 Sun
+    2 : '☀', # 2 LightCloud
+    3 : '☁', # 3 PartlyCloud
+    4 : '☁', # 4 Cloud
+    5 : '☂', # 5 LightRainSun
+    6 : '☂⚡', # 6 LightRainThunderSun
+    7 : '☔,', # 7 SleetSun
+    8 : '❄', # 8 SnowSun
+    9 : '☂', # 9 LightRain
+    10 : '☔', # 10 Rain
+    11 : '☔⚡', # 11 RainThunder
+    12 : '☔❄', # 12 Sleet
+    13 : '❄', # 13 Snow
+    14 : '❄⚡', # 14 SnowThunder
+    15 : '≋', # 15 Fog
+    20 : '☔❄⚡', # 20 SleetSunThunder
+    21 : '❄⚡', # 21 SnowSunThunder
+    22 : '☂⚡', # 22 LightRainThunder
+    23 : '☔❄', # 23 SleetThunder
+    24 : '☂⚡', # 24 DrizzleThunderSun
+    25 : '☔', # 25 RainThunderSun
+    26 : '☂❄⚡', # 26 LightSleetThunderSun
+    27 : '☔❄⚡', # 27 HeavySleetThunderSun
+    28 : '❄⚡', # 28 LightSnowThunderSun
+    29 : '❄⚡', # 29 HeavySnowThunderSun
+    30 : '☂⚡', # 30 DrizzleThunder
+    31 : '☂❄⚡', # 31 LightSleetThunder
+    32 : '☔❄⚡', # 32 HeavySleetThunder
+    33 : '❄⚡', # 33 LightSnowThunder
+    34 : '❄⚡', # 34 HeavySnowThunder
+    40 : '☂', # 40 DrizzleSun
+    41 : '☔', # 41 RainSun
+    42 : '☂❄', # 42 LightSleetSun
+    43 : '☔❄', # 43 HeavySleetSun
+    44 : '❄', # 44 LightSnowSun
+    45 : '❄', # 45 HeavysnowSun
+    46 : '☂', # 46 Drizzle
+    47 : '☂❄', # 47 LightSleet
+    48 : '☔❄', # 48 HeavySleet
+    49 : '❄', # 49 LightSnow
+    50 : '❄', # 50 HeavySnow
+}
+
+    
+################
+
+
+try:    
+    with open(os.path.join(os.getenv('HOME'), '.i3yrweatheroffset'), 'r') as offsetfile:
+        offset = int(offsetfile.readline().strip())
+except IOError:
+    offset = 0
+    
+try:
+    button = int(os.environ.get('BLOCK_BUTTON'))
+except(Exception):
+    button = 0
+
+if button == 4:
+    offset += 1
+elif button == 5:
+    offset -= 1
+elif button == 1:
+    offset = 0
+
+if offset < 0:
+    offset = 0
+
+try:
+    weather = yr.libyr.Yr(location_name=location)
+except Exception as e:
+    print("yr.no conn err")
+    sys.exit(0)
+
+try:
+    forecasts = [ f for f in weather.forecast() ]
+except Exception as e:
+    print("yr.no pars err")
+    sys.exit(0)
+
+if offset >= len(forecasts):
+    offset = len(forecasts) - 1
+forecast = forecasts[offset]
+
+fcdate = datetime.datetime.strptime(forecast['@from'], "%Y-%m-%dT%H:%M:%S")
+outstr = location.split("/")[-1]
+outstr += fcdate.strftime(" %a %H:%M ")
+symbol_number = int(forecast['symbol']['@number'])
+if symbol_number in weather_symbol.keys():
+    outstr += weather_symbol[symbol_number]
+outstr += forecast['temperature']['@value'] + "°C "
+outstr += str(round(float(forecast['pressure']['@value']))) + "hPa "
+wind_direction = forecast['windDirection']['@code']
+if len(wind_direction) == 3:
+    wind_direction = wind_direction[0]
+outstr += wind_arrow[wind_direction] + forecast['windSpeed']['@mps'] + "m/s "
+outstr += str(round(float(forecast['precipitation']['@value']))) + "mm"
+
+with open(os.path.join(os.getenv('HOME'), '.i3yrweatheroffset'), 'w') as offsetfile:
+    offsetfile.write(str(offset))
+
+print(outstr)
